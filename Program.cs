@@ -14,10 +14,10 @@ namespace WebsockService
     public class WSService : WebSocketBehavior
     {
         protected WebSocket clientWs = null;
-        protected Thread thread = null;
-        public WSService()
+        protected string clientWSUrl;
+        public WSService(string clientWSUrl)
         {
-
+            this.clientWSUrl = clientWSUrl;
         }
 
         protected override void OnMessage(MessageEventArgs e)
@@ -30,10 +30,6 @@ namespace WebsockService
                 }
                 else if (e.IsText)
                 {
-                    if (e.Data == "stop")
-                    {
-                        Console.WriteLine("Stop");
-                    }
                     clientWs.SendAsync(e.Data, x => { });
                 }
             }
@@ -41,40 +37,45 @@ namespace WebsockService
 
         protected override void OnOpen()
         {
-            thread = new Thread(() =>
+            clientWs = new WebSocket(clientWSUrl);
+
+            clientWs.OnMessage += (sender, e) =>
             {
-                clientWs = new WebSocket("ws://192.168.0.53:81/");
-
-                clientWs.OnMessage += (sender, e) =>
+                if (e.IsBinary)
                 {
-                    if (e.IsBinary)
-                    {
-                        SendAsync(e.RawData, x => { });
-                    }
-                    else if (e.IsText)
-                    {
-                        SendAsync(e.Data, x => { });
-                    }
-                };
-
-                clientWs.OnOpen += (sender, e) =>
+                    SendAsync(e.RawData, x => { });
+                }
+                else if (e.IsText)
                 {
+                    SendAsync(e.Data, x => { });
+                }
+            };
+            bool opened = false;
 
-                };
+            clientWs.OnOpen += (sender, e) =>
+            {
+                opened = true;
+            };
 
-                clientWs.OnClose += (sender, e) =>
-                {
-                    Sessions.CloseSession(ID);
-                };
+            clientWs.OnClose += (sender, e) =>
+            {
+                Sessions.CloseSession(ID);
+            };
 
-                clientWs.OnError += (sender, e) =>
-                {
-                    Error(e.Message, e.Exception);
-                };
+            clientWs.OnError += (sender, e) =>
+            {
+                Error(e.Message, e.Exception);
+            };
 
-                clientWs.Connect();
-            });
-            thread.Start();
+            clientWs.ConnectAsync();
+
+            Thread.Sleep(1000);
+
+            if (!opened)
+            {
+                clientWs.Close();
+                Sessions.CloseSession(ID);
+            }
         }
 
         protected override void OnClose(CloseEventArgs e)
@@ -84,7 +85,7 @@ namespace WebsockService
 
         protected override void OnError(ErrorEventArgs e)
         {
-            Console.WriteLine("Error: (" + e.Exception + ") " + e.Message);
+            
         }
     }
 
@@ -93,12 +94,17 @@ namespace WebsockService
         public static void Main(string[] args)
         {
             var wssv = new WebSocketServer(8181, true);
-            //wssv.SslConfiguration.ServerCertificate = new X509Certificate2("x509-cert.pfx", "yj5t1u068nyrw1g8yk10s165a1v9");
             wssv.SslConfiguration.ServerCertificate = new X509Certificate2("ospanel.pfx", "AF90673611D8DD9B");
-            wssv.AddWebSocketService("/audio", () => new WSService());
+            wssv.Log.File = DateTime.Now.ToString("dd-MM-yyyy HH-mm-ss") + ".txt";
+            wssv.Log.Level = LogLevel.Debug;
+
+            wssv.AddWebSocketService("/audio", () => new WSService("ws://192.168.0.53:81/"));
+
             wssv.Start();
-            Console.WriteLine("WS started, press any key to stop...");
-            Console.ReadKey(true);
+            Console.WriteLine("WebSocketServer started");
+            Console.WriteLine("Press Q to stop");
+            ConsoleKeyInfo key;
+            while ((key = Console.ReadKey()).Key != ConsoleKey.Q) ;
             wssv.Stop();
         }
     }
