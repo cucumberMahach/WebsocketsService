@@ -1,0 +1,13 @@
+{
+	"X509Certificate2": {
+		"path": "ospanel.pfx",
+		"password": "AF90673611D8DD9B"
+	},
+	"wsPort": 8181,
+	"tunnelClients": [
+		{
+			"wsUrl": "ws://192.168.0.53:81/",
+			"wsPath": "/audio"
+		}
+	]
+}
